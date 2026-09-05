@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Homework Reminder</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#5b5fef">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Homework">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="header-top">
+        <h1>📚 Homework Reminder</h1>
+        <div class="header-actions">
+          <button id="settings-btn" class="icon-btn-header" type="button" title="Reminder settings">⚙</button>
+          <button id="install-btn" class="hidden" type="button">Install app</button>
+        </div>
+      </div>
+      <p class="subtitle">Add your assignments and never miss a due date.</p>
+    </header>
+
+    <div id="settings-panel" class="settings-panel hidden">
+      <div class="settings-row">
+        <label for="lead-days">Remind me</label>
+        <input type="number" id="lead-days" min="0" max="30" value="1">
+        <span>day(s) before it's due</span>
+      </div>
+      <div class="settings-row">
+        <label for="frequency">How often</label>
+        <select id="frequency">
+          <option value="once">Once</option>
+          <option value="daily">Every day until done</option>
+        </select>
+      </div>
+    </div>
+
+    <form id="add-form">
+      <div class="row">
+        <input type="text" id="title" placeholder="Assignment (e.g. Math worksheet ch. 4)" required>
+        <input type="text" id="subject" placeholder="Subject (optional)">
+      </div>
+      <div class="row">
+        <input type="date" id="dueDate" required>
+        <input type="time" id="dueTime" aria-label="Due time (optional)">
+        <input type="text" id="notes" placeholder="Notes (optional)">
+        <button type="submit">Add</button>
+      </div>
+    </form>
+
+    <div id="due-tomorrow-banner" class="banner hidden"></div>
+
+    <div class="lists">
+      <section>
+        <h2>Overdue</h2>
+        <ul id="list-overdue" class="hw-list"></ul>
+      </section>
+      <section>
+        <h2>Due Soon</h2>
+        <ul id="list-tomorrow" class="hw-list"></ul>
+      </section>
+      <section>
+        <h2>Upcoming</h2>
+        <ul id="list-upcoming" class="hw-list"></ul>
+      </section>
+      <section>
+        <h2>Completed</h2>
+        <ul id="list-done" class="hw-list"></ul>
+      </section>
+    </div>
+  </div>
+
+  <script src="/script.js"></script>
+</body>
+</html>
