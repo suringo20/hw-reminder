@@ -90,6 +90,34 @@ function notifyDueSoon(items, frequency) {
   localStorage.setItem(NOTIFIED_KEY, JSON.stringify(notified));
 }
 
+const DUE_NOW_KEY = "hw-notified-due-now";
+let lastDueCheck = Date.now();
+
+// Fires a notification the moment an assignment's exact due date+time is
+// reached, independent of the "remind me N days before" setting above.
+// Only fires while this tab is open and running -- there's no background
+// push, so closing the browser means missing it.
+function checkDueNow() {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const now = Date.now();
+  const items = loadItems().filter((i) => !i.done);
+  const validIds = new Set(items.map((i) => i.id));
+  const notified = new Set(
+    JSON.parse(localStorage.getItem(DUE_NOW_KEY) || "[]").filter((id) => validIds.has(id))
+  );
+  for (const item of items) {
+    const t = dueDateTime(item).getTime();
+    if (t > lastDueCheck && t <= now && !notified.has(item.id)) {
+      new Notification("Homework due now", { body: item.title, icon: "/icons/icon-192.png" });
+      notified.add(item.id);
+    }
+  }
+  localStorage.setItem(DUE_NOW_KEY, JSON.stringify([...notified]));
+  lastDueCheck = now;
+}
+
+setInterval(checkDueNow, 20000);
+
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
