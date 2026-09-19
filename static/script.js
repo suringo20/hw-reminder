@@ -8,8 +8,52 @@ const frequencyInput = document.getElementById("frequency");
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+    navigator.serviceWorker
+      .register("/service-worker.js")
+      .then(() => syncPushSubscription())
+      .catch(() => {});
   });
+}
+
+// Public VAPID key for this deployment -- safe to expose client-side.
+const VAPID_PUBLIC_KEY =
+  "BJMDx0ZiupRR9GRiiVFDRWSuieTczTYoRxS5CpDt6Pn2UTkF51Vmt1zQy8WQ6waltQupocVcrJEhcPEQu4udEkw";
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
+// Registers (or refreshes) this device's push subscription with the server
+// and sends it the current pending homework, so the daily "due tomorrow"
+// cron job (see api/send-reminders.py) can notify even if this tab is
+// closed. Fails silently if push isn't supported or the backend isn't
+// configured yet -- the in-app reminders keep working either way.
+async function syncPushSubscription() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  if (Notification.permission !== "granted") return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+    }
+    const items = loadItems()
+      .filter((i) => !i.done)
+      .map((i) => ({ id: i.id, title: i.title, dueDate: i.dueDate }));
+    await fetch("/api/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subscription: sub.toJSON(), items }),
+    });
+  } catch {
+    // Push unavailable or backend not set up yet -- ignore.
+  }
 }
 
 let deferredInstallPrompt = null;
@@ -30,7 +74,9 @@ window.addEventListener("appinstalled", () => {
 });
 
 if ("Notification" in window && Notification.permission === "default") {
-  Notification.requestPermission();
+  Notification.requestPermission().then((perm) => {
+    if (perm === "granted") syncPushSubscription();
+  });
 }
 
 const SETTINGS_KEY = "hw-settings";
@@ -272,6 +318,8 @@ function render() {
   } else {
     banner.classList.add("hidden");
   }
+
+  syncPushSubscription();
 }
 
 form.addEventListener("submit", (e) => {
