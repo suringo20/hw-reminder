@@ -48,8 +48,14 @@
         <input type="text" id="subject" placeholder="Subject (optional)">
       </div>
       <div class="row">
-        <input type="date" id="dueDate" required>
-        <input type="time" id="dueTime" aria-label="Due time (optional)">
+        <div class="field field-date">
+          <label for="dueDate">Due date</label>
+          <input type="date" id="dueDate" required>
+        </div>
+        <div class="field field-time">
+          <label for="dueTime">Due time (optional)</label>
+          <input type="time" id="dueTime">
+        </div>
         <input type="text" id="notes" placeholder="Notes (optional)">
         <button type="submit" id="submit-btn">Add</button>
         <button type="button" id="cancel-edit-btn" class="secondary hidden">Cancel</button>
