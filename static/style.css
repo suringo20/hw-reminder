@@ -169,7 +169,8 @@ input[type="time"] {
   input[type="time"] {
     flex: 1;
   }
-  .row button[type="submit"] {
+  .row button[type="submit"],
+  .row button.secondary {
     width: 100%;
   }
 }
@@ -185,6 +186,13 @@ button {
   white-space: nowrap;
 }
 button:hover { opacity: 0.9; }
+
+button.secondary {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+button.secondary.hidden { display: none; }
 
 .banner {
   background: var(--warn-bg);

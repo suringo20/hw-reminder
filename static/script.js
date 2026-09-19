@@ -4,6 +4,13 @@ const installBtn = document.getElementById("install-btn");
 const settingsBtn = document.getElementById("settings-btn");
 const settingsPanel = document.getElementById("settings-panel");
 const offsetCheckboxes = Array.from(document.querySelectorAll(".offset-checkbox"));
+const submitBtn = document.getElementById("submit-btn");
+const cancelEditBtn = document.getElementById("cancel-edit-btn");
+const titleInput = document.getElementById("title");
+const subjectInput = document.getElementById("subject");
+const dueDateInput = document.getElementById("dueDate");
+const dueTimeInput = document.getElementById("dueTime");
+const notesInput = document.getElementById("notes");
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -234,9 +241,52 @@ function toggleDone(id, done) {
   }
 }
 
+function updateItem(id, payload) {
+  const items = loadItems();
+  const item = items.find((i) => i.id === id);
+  if (!item) return;
+  item.title = payload.title;
+  item.subject = payload.subject || "";
+  item.dueDate = payload.dueDate;
+  item.dueTime = payload.dueTime || "";
+  item.notes = payload.notes || "";
+  saveItems(items);
+  // Notification history is tied to the old due date/time -- clear it for
+  // this item so edited reminders can fire again under the new schedule.
+  const notified = JSON.parse(localStorage.getItem(NOTIFIED_KEY) || "[]").filter(
+    (k) => k.split(":")[0] !== id
+  );
+  localStorage.setItem(NOTIFIED_KEY, JSON.stringify(notified));
+}
+
 function deleteItem(id) {
   saveItems(loadItems().filter((i) => i.id !== id));
+  if (editingId === id) cancelEdit();
 }
+
+let editingId = null;
+
+function startEdit(item) {
+  editingId = item.id;
+  titleInput.value = item.title;
+  subjectInput.value = item.subject || "";
+  dueDateInput.value = item.dueDate;
+  dueTimeInput.value = item.dueTime || "";
+  notesInput.value = item.notes || "";
+  submitBtn.textContent = "Save changes";
+  cancelEditBtn.classList.remove("hidden");
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  titleInput.focus();
+}
+
+function cancelEdit() {
+  editingId = null;
+  form.reset();
+  submitBtn.textContent = "Add";
+  cancelEditBtn.classList.add("hidden");
+}
+
+cancelEditBtn.addEventListener("click", cancelEdit);
 
 function makeItemEl(item, kind) {
   const li = document.createElement("li");
@@ -265,6 +315,12 @@ function makeItemEl(item, kind) {
     render();
   };
 
+  const editBtn = document.createElement("button");
+  editBtn.className = "icon-btn";
+  editBtn.title = "Edit";
+  editBtn.textContent = "✎";
+  editBtn.onclick = () => startEdit(item);
+
   const delBtn = document.createElement("button");
   delBtn.className = "icon-btn delete";
   delBtn.title = "Delete";
@@ -276,6 +332,7 @@ function makeItemEl(item, kind) {
 
   li.appendChild(info);
   li.appendChild(doneBtn);
+  li.appendChild(editBtn);
   li.appendChild(delBtn);
   return li;
 }
@@ -324,14 +381,19 @@ function render() {
 
 form.addEventListener("submit", (e) => {
   e.preventDefault();
-  const title = document.getElementById("title").value.trim();
-  const subject = document.getElementById("subject").value.trim();
-  const dueDate = document.getElementById("dueDate").value;
-  const dueTime = document.getElementById("dueTime").value;
-  const notes = document.getElementById("notes").value.trim();
+  const title = titleInput.value.trim();
+  const subject = subjectInput.value.trim();
+  const dueDate = dueDateInput.value;
+  const dueTime = dueTimeInput.value;
+  const notes = notesInput.value.trim();
   if (!title || !dueDate) return;
-  addItem({ title, subject, dueDate, dueTime, notes });
-  form.reset();
+  if (editingId) {
+    updateItem(editingId, { title, subject, dueDate, dueTime, notes });
+    cancelEdit();
+  } else {
+    addItem({ title, subject, dueDate, dueTime, notes });
+    form.reset();
+  }
   render();
 });
 
