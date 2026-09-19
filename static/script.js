@@ -14,8 +14,26 @@ const notesInput = document.getElementById("notes");
 const testNotificationBtn = document.getElementById("test-notification-btn");
 const notificationStatus = document.getElementById("notification-status");
 
+function isIos() {
+  return (
+    /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
+function isStandalone() {
+  return window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+}
+
+function iosNeedsHomeScreen() {
+  return isIos() && !isStandalone();
+}
+
 function updateNotificationStatus() {
-  if (!("Notification" in window)) {
+  if (iosNeedsHomeScreen()) {
+    notificationStatus.textContent =
+      'On iPhone/iPad, notifications only work once this is added to your Home Screen: tap the Share icon, then "Add to Home Screen", then open the app from there instead of Safari.';
+  } else if (!("Notification" in window)) {
     notificationStatus.textContent = "Notifications aren't supported in this browser.";
   } else if (Notification.permission === "denied") {
     notificationStatus.textContent = "Blocked — enable notifications for this site in your browser settings.";
@@ -27,7 +45,7 @@ function updateNotificationStatus() {
 }
 
 testNotificationBtn.addEventListener("click", async () => {
-  if (!("Notification" in window)) {
+  if (iosNeedsHomeScreen() || !("Notification" in window)) {
     updateNotificationStatus();
     return;
   }

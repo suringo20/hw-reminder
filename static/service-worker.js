@@ -1,4 +1,4 @@
-const CACHE_NAME = "hw-reminder-v11";
+const CACHE_NAME = "hw-reminder-v12";
 const APP_SHELL = [
   "/",
   "/style.css",
