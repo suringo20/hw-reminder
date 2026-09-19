@@ -11,6 +11,41 @@ const subjectInput = document.getElementById("subject");
 const dueDateInput = document.getElementById("dueDate");
 const dueTimeInput = document.getElementById("dueTime");
 const notesInput = document.getElementById("notes");
+const testNotificationBtn = document.getElementById("test-notification-btn");
+const notificationStatus = document.getElementById("notification-status");
+
+function updateNotificationStatus() {
+  if (!("Notification" in window)) {
+    notificationStatus.textContent = "Notifications aren't supported in this browser.";
+  } else if (Notification.permission === "denied") {
+    notificationStatus.textContent = "Blocked — enable notifications for this site in your browser settings.";
+  } else if (Notification.permission === "granted") {
+    notificationStatus.textContent = "";
+  } else {
+    notificationStatus.textContent = "Not yet enabled — click the button to allow notifications.";
+  }
+}
+
+testNotificationBtn.addEventListener("click", async () => {
+  if (!("Notification" in window)) {
+    updateNotificationStatus();
+    return;
+  }
+  let permission = Notification.permission;
+  if (permission === "default") {
+    permission = await Notification.requestPermission();
+  }
+  if (permission === "granted") {
+    new Notification("Test notification", {
+      body: "If you can see this, notifications are working on this device.",
+      icon: "/icons/icon-192.png",
+    });
+    notificationStatus.textContent = "Sent! Check your notifications.";
+    syncPushSubscription();
+  } else {
+    updateNotificationStatus();
+  }
+});
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -111,6 +146,7 @@ function saveSettings(settings) {
 
 settingsBtn.addEventListener("click", () => {
   settingsPanel.classList.toggle("hidden");
+  updateNotificationStatus();
 });
 
 function applySettingsInputs(settings) {

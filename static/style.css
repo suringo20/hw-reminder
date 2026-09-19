@@ -131,6 +131,19 @@ header h1 {
   line-height: 1.4;
 }
 
+.settings-test {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-test button {
+  flex-shrink: 0;
+}
+
 form#add-form {
   background: var(--card);
   border: 1px solid var(--border);
