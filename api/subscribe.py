@@ -29,6 +29,7 @@ class handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(length))
             subscription = data["subscription"]
             items = data.get("items", [])
+            day_offsets = data.get("dayOffsets", [])
             endpoint = subscription["endpoint"]
 
             sub_id = hashlib.sha256(endpoint.encode()).hexdigest()[:32]
@@ -37,7 +38,12 @@ class handler(BaseHTTPRequestHandler):
             existing = get_json(key) or {}
             notified = existing.get("notified", [])
 
-            set_json(key, {"subscription": subscription, "items": items, "notified": notified})
+            set_json(key, {
+                "subscription": subscription,
+                "items": items,
+                "dayOffsets": day_offsets,
+                "notified": notified,
+            })
             sadd(SUBS_SET, sub_id)
 
             _json_response(self, 200, {"ok": True})

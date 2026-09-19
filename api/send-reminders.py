@@ -1,7 +1,13 @@
-"""Vercel Cron target: once a day, push a notification for anything due tomorrow.
+"""Vercel Cron target: once a day, push a notification for anything due
+in N days, for each day-offset (1 day, 2 days, ...) a subscription picked.
 
-Each stored subscription keeps its own "notified" list so an assignment is
-only pushed once, no matter how many times this runs before its due date.
+Minute/hour-level offsets ("5 minutes before", "1 hour before", "right when
+due") can't be handled here -- Vercel's free-tier cron only runs once a day,
+so those stay in-app-only (see checkReminders() in static/script.js).
+
+Each stored subscription keeps its own "notified" list, keyed by
+"<item id>:<offset minutes>", so a given (item, offset) pair is only
+pushed once no matter how many days this runs before the item is due.
 """
 import json
 import os
@@ -21,7 +27,7 @@ CRON_SECRET = os.environ.get("CRON_SECRET", "")
 
 
 def run():
-    tomorrow = (datetime.now(ZoneInfo(TIMEZONE)) + timedelta(days=1)).strftime("%Y-%m-%d")
+    now = datetime.now(ZoneInfo(TIMEZONE))
     sent = 0
 
     for sub_id in smembers(SUBS_SET):
@@ -32,33 +38,53 @@ def run():
             continue
 
         items = record.get("items", [])
+        day_offsets = record.get("dayOffsets", [])
         notified = set(record.get("notified", []))
-        due = [i for i in items if i.get("dueDate") == tomorrow and i.get("id") not in notified]
-        if not due:
-            continue
+        dirty = False
+        unsubscribed = False
 
-        body = (
-            due[0]["title"]
-            if len(due) == 1
-            else f"{len(due)} assignments: " + ", ".join(i["title"] for i in due)
-        )
+        for offset in day_offsets:
+            days = offset // 1440
+            if offset % 1440 != 0 or days <= 0:
+                continue
+            target_date = (now + timedelta(days=days)).strftime("%Y-%m-%d")
+            due = [
+                i for i in items
+                if i.get("dueDate") == target_date and f"{i.get('id')}:{offset}" not in notified
+            ]
+            if not due:
+                continue
 
-        try:
-            webpush(
-                subscription_info=record["subscription"],
-                data=json.dumps({"title": "Homework due tomorrow", "body": body}),
-                vapid_private_key=VAPID_PRIVATE_KEY,
-                vapid_claims={"sub": VAPID_SUBJECT},
+            when = "tomorrow" if days == 1 else f"in {days} days"
+            body = (
+                due[0]["title"]
+                if len(due) == 1
+                else f"{len(due)} assignments: " + ", ".join(i["title"] for i in due)
             )
-            sent += 1
-            notified.update(i["id"] for i in due)
+
+            try:
+                webpush(
+                    subscription_info=record["subscription"],
+                    data=json.dumps({"title": f"Homework due {when}", "body": body}),
+                    vapid_private_key=VAPID_PRIVATE_KEY,
+                    vapid_claims={"sub": VAPID_SUBJECT},
+                )
+                sent += 1
+                notified.update(f"{i['id']}:{offset}" for i in due)
+                dirty = True
+            except WebPushException as e:
+                status = getattr(e.response, "status_code", None)
+                if status in (404, 410):
+                    delete(key)
+                    srem(SUBS_SET, sub_id)
+                    unsubscribed = True
+                break
+
+        if unsubscribed:
+            continue
+        if dirty:
             record["notified"] = list(notified)
             set_json(key, record)
-        except WebPushException as e:
-            status = getattr(e.response, "status_code", None)
-            if status in (404, 410):
-                delete(key)
-                srem(SUBS_SET, sub_id)
 
     return sent
 

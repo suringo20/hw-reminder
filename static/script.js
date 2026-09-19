@@ -3,8 +3,7 @@ const banner = document.getElementById("due-tomorrow-banner");
 const installBtn = document.getElementById("install-btn");
 const settingsBtn = document.getElementById("settings-btn");
 const settingsPanel = document.getElementById("settings-panel");
-const leadDaysInput = document.getElementById("lead-days");
-const frequencyInput = document.getElementById("frequency");
+const offsetCheckboxes = Array.from(document.querySelectorAll(".offset-checkbox"));
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -46,10 +45,12 @@ async function syncPushSubscription() {
     const items = loadItems()
       .filter((i) => !i.done)
       .map((i) => ({ id: i.id, title: i.title, dueDate: i.dueDate }));
+    // Only day-granularity offsets are deliverable by the once-a-day cron.
+    const dayOffsets = loadSettings().offsets.filter((m) => m >= 1440);
     await fetch("/api/subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subscription: sub.toJSON(), items }),
+      body: JSON.stringify({ subscription: sub.toJSON(), items, dayOffsets }),
     });
   } catch {
     // Push unavailable or backend not set up yet -- ignore.
@@ -80,23 +81,25 @@ if ("Notification" in window && Notification.permission === "default") {
 }
 
 const SETTINGS_KEY = "hw-settings";
-const NOTIFIED_KEY = "hw-notified";
+const NOTIFIED_KEY = "hw-notified-offsets";
+
+// Selectable reminder trigger points, each independent -- an item can fire
+// several of these. Values are minutes before the due date+time.
+const OFFSET_OPTIONS = [2880, 1440, 60, 5, 0];
 
 function loadSettings() {
+  const raw = localStorage.getItem(SETTINGS_KEY);
+  if (raw === null) return { offsets: [1440] }; // first run default: 1 day before
   try {
-    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
-    return {
-      leadDays: Number.isFinite(s.leadDays) ? s.leadDays : 1,
-      frequency: s.frequency === "daily" ? "daily" : "once",
-    };
+    const s = JSON.parse(raw);
+    return { offsets: Array.isArray(s.offsets) ? s.offsets.filter((m) => OFFSET_OPTIONS.includes(m)) : [] };
   } catch {
-    return { leadDays: 1, frequency: "once" };
+    return { offsets: [1440] };
   }
 }
 
 function saveSettings(settings) {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  localStorage.removeItem(NOTIFIED_KEY); // reset dedup history so the new settings take effect right away
 }
 
 settingsBtn.addEventListener("click", () => {
@@ -104,65 +107,63 @@ settingsBtn.addEventListener("click", () => {
 });
 
 function applySettingsInputs(settings) {
-  leadDaysInput.value = settings.leadDays;
-  frequencyInput.value = settings.frequency;
+  offsetCheckboxes.forEach((cb) => {
+    cb.checked = settings.offsets.includes(Number(cb.value));
+  });
 }
 
-[leadDaysInput, frequencyInput].forEach((el) => {
-  el.addEventListener("change", () => {
-    const leadDays = Math.max(0, Math.min(30, parseInt(leadDaysInput.value, 10) || 0));
-    leadDaysInput.value = leadDays;
-    saveSettings({ leadDays, frequency: frequencyInput.value });
+offsetCheckboxes.forEach((cb) => {
+  cb.addEventListener("change", () => {
+    const offsets = offsetCheckboxes.filter((c) => c.checked).map((c) => Number(c.value));
+    saveSettings({ offsets });
     render();
+    checkReminders();
   });
 });
 
-// Notify according to the user's chosen frequency: "once" ever per item, or
-// "daily" (at most once per calendar day per item) until it's done.
-function notifyDueSoon(items, frequency) {
-  if (!("Notification" in window) || Notification.permission !== "granted") return;
-  const today = todayStr();
-  const notified = JSON.parse(localStorage.getItem(NOTIFIED_KEY) || "{}");
-  const fresh = items.filter((i) => {
-    const last = notified[i.id];
-    return frequency === "daily" ? last !== today : !last;
-  });
-  if (fresh.length === 0) return;
-  const body = fresh.length === 1
-    ? fresh[0].title
-    : `${fresh.length} assignments: ${fresh.map((i) => i.title).join(", ")}`;
-  new Notification("Homework due soon", { body, icon: "/icons/icon-192.png" });
-  fresh.forEach((i) => (notified[i.id] = today));
-  localStorage.setItem(NOTIFIED_KEY, JSON.stringify(notified));
+function offsetPhrase(minutes) {
+  if (minutes === 0) return "due now";
+  if (minutes < 60) return `due in ${minutes} minute${minutes === 1 ? "" : "s"}`;
+  if (minutes < 1440) {
+    const h = minutes / 60;
+    return `due in ${h} hour${h === 1 ? "" : "s"}`;
+  }
+  const d = minutes / 1440;
+  return `due in ${d} day${d === 1 ? "" : "s"}`;
 }
 
-const DUE_NOW_KEY = "hw-notified-due-now";
-let lastDueCheck = Date.now();
-
-// Fires a notification the moment an assignment's exact due date+time is
-// reached, independent of the "remind me N days before" setting above.
-// Only fires while this tab is open and running -- there's no background
-// push, so closing the browser means missing it.
-function checkDueNow() {
+// Fires a notification for each selected offset (2 days before, 1 hour
+// before, right when due, etc.) the moment that trigger point is reached.
+// Each (item, offset) pair notifies at most once, tracked in localStorage.
+// Only fires while this tab/app is open -- there's no background push here;
+// see api/send-reminders.py for the day-level reminders that work when closed.
+function checkReminders() {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const settings = loadSettings();
+  if (settings.offsets.length === 0) return;
   const now = Date.now();
   const items = loadItems().filter((i) => !i.done);
   const validIds = new Set(items.map((i) => i.id));
   const notified = new Set(
-    JSON.parse(localStorage.getItem(DUE_NOW_KEY) || "[]").filter((id) => validIds.has(id))
+    JSON.parse(localStorage.getItem(NOTIFIED_KEY) || "[]").filter((k) => validIds.has(k.split(":")[0]))
   );
   for (const item of items) {
-    const t = dueDateTime(item).getTime();
-    if (t > lastDueCheck && t <= now && !notified.has(item.id)) {
-      new Notification("Homework due now", { body: item.title, icon: "/icons/icon-192.png" });
-      notified.add(item.id);
+    const dueMs = dueDateTime(item).getTime();
+    for (const offset of settings.offsets) {
+      const key = `${item.id}:${offset}`;
+      if (dueMs - offset * 60000 <= now && !notified.has(key)) {
+        new Notification("Homework reminder", {
+          body: `${item.title} — ${offsetPhrase(offset)}`,
+          icon: "/icons/icon-192.png",
+        });
+        notified.add(key);
+      }
     }
   }
-  localStorage.setItem(DUE_NOW_KEY, JSON.stringify([...notified]));
-  lastDueCheck = now;
+  localStorage.setItem(NOTIFIED_KEY, JSON.stringify([...notified]));
 }
 
-setInterval(checkDueNow, 20000);
+setInterval(checkReminders, 20000);
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -284,7 +285,7 @@ function render() {
   const settings = loadSettings();
   applySettingsInputs(settings);
   const now = new Date();
-  const windowEnd = addDaysStr(settings.leadDays);
+  const windowEnd = addDaysStr(1); // "Due Soon" is just a display grouping, independent of notification settings
 
   const overdueEl = document.getElementById("list-overdue");
   const dueSoonEl = document.getElementById("list-tomorrow");
@@ -311,14 +312,13 @@ function render() {
   }
 
   if (dueSoonItems.length > 0) {
-    const window = settings.leadDays === 0 ? "today" : `within ${settings.leadDays} day${settings.leadDays > 1 ? "s" : ""}`;
-    banner.textContent = `⏰ ${dueSoonItems.length} assignment${dueSoonItems.length > 1 ? "s" : ""} due ${window}!`;
+    banner.textContent = `⏰ ${dueSoonItems.length} assignment${dueSoonItems.length > 1 ? "s" : ""} due within 1 day!`;
     banner.classList.remove("hidden");
-    notifyDueSoon(dueSoonItems, settings.frequency);
   } else {
     banner.classList.add("hidden");
   }
 
+  checkReminders();
   syncPushSubscription();
 }
 

@@ -27,18 +27,15 @@
     </header>
 
     <div id="settings-panel" class="settings-panel hidden">
-      <div class="settings-row">
-        <label for="lead-days">Remind me</label>
-        <input type="number" id="lead-days" min="0" max="30" value="1">
-        <span>day(s) before it's due</span>
+      <span class="settings-label">Notify me:</span>
+      <div class="settings-checkboxes">
+        <label><input type="checkbox" class="offset-checkbox" value="2880"> 2 days before</label>
+        <label><input type="checkbox" class="offset-checkbox" value="1440"> 1 day before</label>
+        <label><input type="checkbox" class="offset-checkbox" value="60"> 1 hour before</label>
+        <label><input type="checkbox" class="offset-checkbox" value="5"> 5 minutes before</label>
+        <label><input type="checkbox" class="offset-checkbox" value="0"> Right when it's due</label>
       </div>
-      <div class="settings-row">
-        <label for="frequency">How often</label>
-        <select id="frequency">
-          <option value="once">Once</option>
-          <option value="daily">Every day until done</option>
-        </select>
-      </div>
+      <p class="settings-note">"Days before" reminders can arrive even with the app closed. "1 hour before", "5 minutes before", and "right when it's due" only fire while this tab/app is open.</p>
     </div>
 
     <form id="add-form">

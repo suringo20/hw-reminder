@@ -97,30 +97,38 @@ header h1 {
 }
 .settings-panel.hidden { display: none; }
 
-.settings-row {
+.settings-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.settings-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-checkboxes label {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
   font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.settings-checkboxes input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.settings-note {
+  margin: 0;
+  font-size: 0.78rem;
   color: var(--muted);
-}
-
-.settings-row input[type="number"] {
-  width: 60px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-}
-
-.settings-row select {
-  padding: 6px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
+  line-height: 1.4;
 }
 
 form#add-form {
